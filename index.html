@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Invitación Interactiva</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      margin: 0; padding: 0;
+      width: 100vw; height: 100vh;
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    #video-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #111;
+    }
+    video {
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      background: #111;
+      display: block;
+    }
+    .side-btn {
+      display: none;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 60px; height: 60px;
+      background: rgba(255,255,255,0.7);
+      border: none;
+      border-radius: 50%;
+      font-size: 2.2em;
+      color: #333;
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      opacity: 0.9;
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+    }
+    #btn-left { left: 12px; }
+    #btn-right { right: 12px; }
+    .side-btn:active { background: #fff; }
+  </style>
+</head>
+<body>
+  <div id="video-container">
+    <video id="video" playsinline preload="auto"></video>
+    <button id="btn-left" class="side-btn">&#8592;</button>
+    <button id="btn-right" class="side-btn">&#8594;</button>
+  </div>
+  <script>
+    // Video filenames (must be in /videos/)
+    const clips = [
+      "clip1.mp4", // 0
+      "clip2.mp4", // 1
+      "clip3.mp4", // 2
+      "clip4.mp4", // 3
+      "clip5.mp4", // 4
+      "clip6.mp4", // 5
+      "clip7.mp4", // 6
+      "clip8.mp4", // 7
+    ];
+
+    // Estado para controlar el flujo
+    let state = {
+      step: 0,         // 0: inicio, 1: esperando click para clip2, 2: botones activos
+      rightClicks: 0,  // cuenta clicks derechos en etapa principal
+      fase: "main",    // "main", "clip6", "clip7", "clip8"
+      lockClicks: false,
+      currentClip: 0,
+    };
+
+    const video = document.getElementById('video');
+    const btnLeft = document.getElementById('btn-left');
+    const btnRight = document.getElementById('btn-right');
+
+    function playClip(n, callback) {
+      state.currentClip = n;
+      video.src = `videos/${clips[n]}`;
+      video.load();
+      video.currentTime = 0;
+      video.play().catch(()=>{});
+      video.onended = callback || null;
+      video.controls = false;
+      video.style.pointerEvents = 'none';
+    }
+
+    function hideButtons() {
+      btnLeft.style.display = "none";
+      btnRight.style.display = "none";
+    }
+    function showButtons() {
+      btnLeft.style.display = "block";
+      btnRight.style.display = "block";
+    }
+
+    function reset() {
+      state = { step: 0, rightClicks: 0, fase: "main", lockClicks: false, currentClip: 0 };
+      hideButtons();
+      setTimeout(() => {
+        playClip(0, () => {});
+        state.step = 1;
+      }, 1000);
+    }
+
+    // Inicio
+    window.onload = reset;
+
+    // Click global para pasar de clip1 a clip2
+    document.getElementById('video-container').addEventListener('pointerdown', (e) => {
+      if(state.lockClicks) return;
+      if(state.step === 1) {
+        state.lockClicks = true;
+        playClip(1, () => {
+          showButtons();
+          state.step = 2;
+          state.lockClicks = false;
+        });
+        state.step = 1.5;
+      }
+    });
+
+    // Botón derecho
+    btnRight.addEventListener('click', () => {
+      if(state.lockClicks) return;
+      state.lockClicks = true;
+      // Fase principal: clip3,4,5
+      if(state.step === 2 && state.fase === "main") {
+        if(state.rightClicks === 0) {
+          playClip(2, () => { state.lockClicks = false; }); // clip3
+          state.rightClicks = 1;
+        } else if(state.rightClicks === 1) {
+          playClip(3, () => { state.lockClicks = false; }); // clip4
+          state.rightClicks = 2;
+        } else if(state.rightClicks === 2) {
+          playClip(4, () => { state.lockClicks = false; }); // clip5
+          state.rightClicks = 3;
+        }
+      }
+      // Después de 3 clicks derechos (en clip5)
+      else if(state.fase === "main" && state.rightClicks === 3 && state.currentClip === 4) {
+        // NO hace nada en click derecho (queda en clip5)
+        state.lockClicks = false;
+      }
+      // Fase clip6 (solo accesible desde click izq en clip5)
+      else if(state.fase === "clip6" && state.currentClip === 5) {
+        // click derecho: vuelve a clip5
+        playClip(4, () => { state.lockClicks = false; });
+        state.fase = "main";
+        state.currentClip = 4;
+      }
+      // Fase clip7
+      else if(state.fase === "clip7" && state.currentClip === 6) {
+        // click derecho: clip8
+        playClip(7, () => { state.lockClicks = false; });
+        state.fase = "clip8";
+        state.currentClip = 7;
+      }
+      // Fase clip8
+      else if(state.fase === "clip8" && state.currentClip === 7) {
+        // click derecho: clip4
+        playClip(3, () => { state.lockClicks = false; });
+        state.fase = "ciclo4";
+        state.currentClip = 3;
+      }
+      // Fase ciclo en clip4 (después de volver tras clip8)
+      else if(state.fase === "ciclo4" && state.currentClip === 3) {
+        // click derecho: clip5
+        playClip(4, () => { state.lockClicks = false; });
+        state.fase = "main";
+        state.currentClip = 4;
+      }
+      // Fase ciclo en clip7 (después de volver tras clip4 por izq)
+      else if(state.fase === "ciclo7" && state.currentClip === 6) {
+        // click derecho: clip8
+        playClip(7, () => { state.lockClicks = false; });
+        state.fase = "clip8";
+        state.currentClip = 7;
+      }
+      else {
+        state.lockClicks = false;
+      }
+    });
+
+    // Botón izquierdo
+    btnLeft.addEventListener('click', () => {
+      if(state.lockClicks) return;
+      state.lockClicks = true;
+      // Solo después de 3 clicks derechos (en clip5)
+      if(state.fase === "main" && state.rightClicks === 3 && state.currentClip === 4) {
+        // click izquierdo: clip6
+        playClip(5, () => { state.lockClicks = false; });
+        state.fase = "clip6";
+        state.currentClip = 5;
+      }
+      // Fase clip6
+      else if(state.fase === "clip6" && state.currentClip === 5) {
+        // click izquierdo: clip7
+        playClip(6, () => { state.lockClicks = false; });
+        state.fase = "clip7";
+        state.currentClip = 6;
+      }
+      // Fase clip7
+      else if(state.fase === "clip7" && state.currentClip === 6) {
+        // click izquierdo: clip8
+        playClip(7, () => { state.lockClicks = false; });
+        state.fase = "clip8";
+        state.currentClip = 7;
+      }
+      // Fase ciclo en clip4 (después de volver tras clip8)
+      else if(state.fase === "ciclo4" && state.currentClip === 3) {
+        // click izquierdo: clip7
+        playClip(6, () => { state.lockClicks = false; });
+        state.fase = "ciclo7";
+        state.currentClip = 6;
+      }
+      // Fase ciclo en clip7 (después de volver tras clip4 por izq)
+      else if(state.fase === "ciclo7" && state.currentClip === 6) {
+        // click izquierdo: clip8
+        playClip(7, () => { state.lockClicks = false; });
+        state.fase = "clip8";
+        state.currentClip = 7;
+      }
+      else {
+        state.lockClicks = false;
+      }
+    });
+
+    // Siempre desbloquea clicks al reproducir cualquier video
+    video.addEventListener('play', () => { state.lockClicks = false; });
+
+    // Previene doble tap/click mientras cambian los videos
+    btnLeft.addEventListener('pointerdown', e => { e.preventDefault(); });
+    btnRight.addEventListener('pointerdown', e => { e.preventDefault(); });
+
+    // Previene scroll en móvil
+    document.body.addEventListener('touchmove', e=>{ e.preventDefault(); }, { passive:false });
+  </script>
+</body>
+</html>
